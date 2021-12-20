@@ -1,0 +1,35 @@
+= NVS - Zusammenfassung
+tarik hosic
+1.0.0, 2021-12-20: Some notes
+ifndef::imagesdir[:imagesdir: images]
+//:toc-placement!:  // prevents the generation of the doc at this position, so it can be printed afterwards
+:sourcedir: ../src/main/java
+:icons: font
+:sectnums:    // Nummerierung der Überschriften / section numbering
+:toc: left
+
+//Need this blank line after ifdef, don't know why...
+ifdef::backend-html5[]
+
+// print the toc here (not at the default position)
+//toc::[]
+
+== Memory Protection
+=== Process Memory
+image::memory-protection-process-memory.png[75%, 75%]
+
+* *Code*: beinhaltet den ausführbaren, binären Code
+** Beispiele: Wenn eine App gestartet wird, wird eine bitweise Kopie der Anwendung hinterlegt
+* *Data*: beinhaltet initialisierte Daten
+** Beispiele: globale Variablen, lokale statische Variablen,...
+* *BSS*: beinhaltet nicht initialisierte Daten
+** Beispiele: globale Variablen welche bereits deklariert wurden, keinen Wert aber besitzen
+* *Heap*: dynamisch zur Laufzeit allokierter Speicher
+Beispiele: via _malloc()_
+* *Stack*: beinhaltet Methoden-return-Adressen, lokale Variablen von Methoden,...
+** Beispiele: stack cookies (auch _canaries_ genannt, 4 bis 8 Byte lang, steht im Stack vor dem Base Pointer, wird in einer Methode vor dem _return_ statement auf Korrektheit überprüft)
+
+=== Exploitation
+image::memory-protection-exploitation.png[50%, 50%]
+=== IOS Security
+
