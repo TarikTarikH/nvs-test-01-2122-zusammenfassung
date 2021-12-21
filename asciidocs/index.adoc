@@ -5,7 +5,7 @@ ifndef::imagesdir[:imagesdir: images]
 //:toc-placement!:  // prevents the generation of the doc at this position, so it can be printed afterwards
 :sourcedir: ../src/main/java
 :icons: font
-:sectnums:    // Nummerierung der Überschriften / section numbering
+:sectnums:   // Nummerierung der Überschriften / section numbering
 :toc: left
 
 //Need this blank line after ifdef, don't know why...
@@ -63,7 +63,7 @@ image::memory-protection-exploitation.png[50%, 50%]
 * System muss DEP-Bits unterstützen
 
 ==== Vorteile von DEP
-* Injecten von bösartigen Code wird schwerer (wenn man schreiben kann, kann man die _memory page_ nicht ausführen)
+* Injecten von bösartigen Code wird schwerer, (wenn man schreiben kann, kann man die _memory page_ nicht ausführen)
 * Exploit Preise höher, es existieren aber Alternativen
 
 ==== Return-Oriented Programming (ROP)
@@ -71,12 +71,12 @@ image::memory-protection-exploitation.png[50%, 50%]
 2. Vom Prozess existierende Codeabschnitte (_gadgets_ genannt) werden für bösartige Absichten ausgeführt
 
 === Address Space Layout Randomization (ASLR)
-* *Startadressen von manchen*(partial ASLR) oder *allen*(full ASLR) Prozessspeicher(Stack, Heap, BSS,...) sind *zufällig*
+* *Startadressen von manchen*(partial ASLR) oder *allen*(full ASLR) Segmenten des Prozessspeichers(Stack, Heap, BSS,...) sind *zufällig*
 * Vorteile
 ** Bösartigen Code injecten, Schwachstellen finden _gadgets_ ausführen sind sehr schwer durchzuführen da die Adressen zufällig sind
 ** ASLR ist die womöglich effektivste Sicherheitsmaßnahme
 * Notwendigkeit von _partial ASLR_
-** Bei _full ASLR_ muss die Applikation und dessen gelinkten Libraries positionsunabhängig kompeliert(position independent, auch _PIE-enabled_ genannt) werden
+** Bei _full ASLR_ muss die Applikation und dessen gelinkten Libraries positionsunabhängig kompiliert(position independent, auch _PIE-enabled_ genannt) werden
 
 IMPORTANT: Genaugenommen muss, um ASLR richtig zu verwenden, alle Programme im System _PIE-enabled_ sein
 
@@ -97,4 +97,142 @@ image::memory-protection-aslr-disabled-vs-enabled.png[]
 ** Ein generelles Register wird verwendet, um die ASLR Adressen zu merken, (schlechte Performance)
 ** Speicheradressen nur 32 Bit lang => maximal 10 Bits fürs Randomisieren => Zufallswert ist nur begrenzt groß (Schwachstelle muss maximal 2^10 ausgenutzt werden, um die richtige Adresse zu erwischen)
 
-== Kernel Address Randomized Link(KARL)
+=== Kernel Address Randomized Link (KARL)
+* Von OpenBSD in 2017 entwickelt
+* Nach jedem Systemstart wird ein neuer Kernel erstellt
+1. Compiler kompiliert und erstellt Object Files (z.B. .o-Dateien)
+2. Am Ende vom Kompilierungsprozess werden die Dateien miteinander verkettet => am Ende nur eine ausführbare Datei
+3. Bei KARL: Verlinken passiert nach dem Zufalllsprinzip beim Systemstart anstatt zur Kompilierzeit
+
+=== Dynamic relinking
+* Kernel wird nach jedem Systemneustart neu gelinkt:
+** Zuerst kommt der *bootstrap loader* dran
+** Danach kommen alle verfügbaren object-Files dran, welche neu gruppiert und neu zusammengesetzt werden (Art und Weise zufällig).
+** Nicht für EFI-Systeme geeignet (wegen der _secure boot signature_)
+
+=== Stack Cookies
+* auch *canaries* genannt
+* Vom Compiler zufällig generierte Werte welche *zwischen Methodenvariablen und der return-Adresse gelegt* werden
+* Während Methodenaufruf: Canary-Wert in *special purpose register* zusätzlich gespeichert
+** Zuerst gespeicherte Werte und Werte im special purpose register werden bei Methodenaufrufen verglichen
+** Bei falschem Wert => Prozess endet und hört auf zu existieren
+* Von allen modernen Compilern supported, müssen aber aktiviert werden.
+** z.B. GCC: `-fstack-protector`
+
+=== Read-only Relocations
+==== Runtime Linker
+* Gibt die Speicheradressen von allen identifizierten, geteilten Librarymethoden
+
+==== Global offset table (GOT) und Procedure linkage table (PLT)
+* Liste von allen gebrauchten Librarymethoden
+* Wird vom Runtime Linker zur Laufzeit mit Runtime-Adressen gefüllt (auch *relocation* genannt)
+
+===== Read-only relocation
+* GOT und PLT sind readonly nach dem befüllen durch den Runtime Linker
+* Muss vom Compiler aktiviert werden, mit `-z relro`
+
+=== Andere Schutzmöglichkeiten
+==== ASCII ARMORING
+* verhindert *Buffer overflow*
+* gefährlichste Libraries an möglichst untersten Adressen hinterlegt
+
+==== Source Fortification
+* Einschalten mit `-D_FORTIFY_SOURCE`
+* Nutzen:
+** automatisch unsichere Methodenaufrufe mit sicheren ersetzt
+** fügt Grenzwerten Überprüfung(boundary checks) hinzu wo möglich
+** keine Null-Pointer dereferenziert
+
+==== Verlinken mit libsafe
+* Systemaufrufe von der Library *libc* abfangen und überprüfen
+** parameter,
+** return-Werte,...
+* Falls eine Attacke abgefangen wurde => SIGKILL(`signal 9`) wird gesendet
+* Andere Sprachen (als C in diesem Fall), ähnliche libraries
+
+== IOS Security
+=== Secure Enclave (SE)
+* Meisten Apple-Geräte haben einen extra Prozessor (T1-Chip oder T2-Chip, auch secure enclave genannt) welcher einen hardwarebasierten, kryptografische Key-Manager besitzt
+* Führt kryptografische Operationen durch
+* Für biometrische Daten zuständig
+* Intakt, auch wenn IOS-Kernel nicht mehr funktioniert
+* Kommuniziert mit CPU nur über *interrupt-driven*-Nachrichtensystem und *shared memory buffers*
+* hat eigenes OS (SE-OS)
+* benutzt L4 Micro-Kernel
+
+https://www.howtogeek.com/339705/what-is-apples-secure-enclave-and-how-does-it-protect-my-iphone-or-mac/[Nützlich]
+
+image::ios-security-secure-enclave.png[75%, 75%]
+
+=== L4 Micro Kernel
+* Serie von Implementierungen vom alten L4-Kernel
+
+==== Micro Kernel
+* Wie normaler Kernel, nur minimalistisch (nur eine wichtige Komponente)
+* Hat Rechte auf Prozess- und Speichermanagement ("privileged CPU mode")
+* Codezeilen in privileged CPU mode auf < 10 000 beschränkt
+* auf circa 20 Systemaufrufe beschränkt
+
+=== Crypto Engine
+==== Boot ROM
+* Von SE, wird nach Gerätestart ausgeführt
+* Besitzt Apple Zertifikat
+* Überprüft SE-OS Kernel
+
+=== Crypto Engine
+* Bei T2 Chip: AES-256 Crypto Engine
+** Zwischen DMA-Pfad (Direct Access Memory) von CPU/RAM und Flash Memory
+* Generiert Key basierend auf:
+** Wert in Hardware gesichert (UID)
+** oder Wert in SE-OS kompiliert (GID)
+* Key nicht von Soft- und Firmware lesbar (nur Ergebnis lesbar)
+* UID und GID nicht über JTAG (https://de.wikipedia.org/wiki/Joint_Test_Action_Group[Methode zum Testen von Schaltungen]) verfügbar
+
+==== TouchID
+* Daten werden an SE weitergegeben
+* Sensor direkt an Serial Bus von SE verbunden
+** => CPU kann nicht auf Daten von TouchID zugreifen
+* Fingerabdruck kann nicht rekonstruiert werden
+* Fingerabdruck verlässt nie Gerät (weder für Backups noch für ICloud)
+
+==== FaceID
+* 30 000 Infrarot Punkt zum Mappen des Gesichts
+* Daten an SE weitersenden zum überprüfen
+* Selbes interface wie TouchID => kein Zugriff durch CPU
+* TouchID/FaceID in Kombination mit Passwort oder PIN
+* Passwort oder PIN wird gebraucht wenn:
+** Firmwareupdate oder Gerät zurücksetzen
+** PIN/Passwort ändern/ansehen
+** Gerät neugestartet oder seit 48 Stunden nicht entsperrt
+
+==== Hardware Microphone
+* Mikrofone mittels Hardware ausgeschaltet sofern MFI konformer Fall vorliegt
+
+==== Random Number Generator (RNG)
+* Alle Apple-OSs beistzen einen kernelbasierten kryptografischen Pseudo-Zufallszahlengenerator ("kernel-based cryptographic pseudo-random number generator", kurz *CPRNG*)
+* sammelt Entropie (Unordnung von Texten) aus dem System
+** Hardware-RNG in SE
+** während Boot gesammelte, zeitbasierte Jitter (=Störungen)
+** seed file, behält Entropien über verschiedene Boots
+** Kontrollierte IO-Daten
+*** Beschleunigungsmesser,
+*** Kompass,
+*** Basisbandfunk
+
+=== Secure Boot
+==== Secure Boot Sequence
+1. Bei Power-On: laded und führt read-only Boot-ROM aus (auch _hardware root of trust_ genannt)
+* Boot ROM besitzt Apples *Root CA* (certification authority) *public key*
+2. Laded public key und verifiziert low-level bootloader (LLB)
+3. LLB verifiziert second-stage boot loader (iBoot)
+4. Wenn iBoot gestartet wurde: Recovery Modus oder IOS Kernel booten
+5. iBoot laded und verifiziert IOS Kernel
+
+IMPORTANT: Boot Sequenz designed, damit alle Systemkomponenten von Apple sind
+
+==== Jail Breaking
+* attackiert Boot-Prozess
+* Ziel:
+** Bugs in Boot-Prozess suchen
+** Überprüfen von Komponenten ausschalten
+** *Ideal: Boot-ROM Schwachstelle finden, da es als einziges nicht durch Software-Updates gefixt werden kann* 
