@@ -22,7 +22,7 @@ image::memory-protection-process-memory.png[75%, 75%]
 ** Beispiele: Wenn eine App gestartet wird, wird eine bitweise Kopie der Anwendung hinterlegt
 * *Data*: beinhaltet initialisierte Daten
 ** Beispiele: globale Variablen, lokale statische Variablen,...
-* *BSS*: beinhaltet nicht initialisierte Daten
+* *Block started by symbol(BSS)*: beinhaltet nicht initialisierte Daten
 ** Beispiele: globale Variablen welche bereits deklariert wurden, keinen Wert aber besitzen
 * *Heap*: dynamisch zur Laufzeit allokierter Speicher
 Beispiele: via _malloc()_
@@ -31,5 +31,70 @@ Beispiele: via _malloc()_
 
 === Exploitation
 image::memory-protection-exploitation.png[50%, 50%]
-=== IOS Security
+* RET = _return_-Punkt
+* EBP = dient als _Base Pointer_, fixe Distanz (in Bytes) zwischen Lokalen Variablen, Parametern, etc. vom EBP (Debugging wird leichter,...)
+* ESP = Stack Pointer, Oberstes Ende vom Stack, ändert sich stetig (deshalb wird der EBP verwendet)
+{sp}+
+{sp}+
+* *remote code execution*: Programme an einen entfernten Rechner ausführen (oftmals malware)
+* Exploitation-Strategien
+** *Bösartigen Code injecten*: passiert meistens im Stack oder Heap, Maschinencode kann in normalen Variablen injected werden
+** *Schwachstellen im Code finden*: Kann die Codeausführung zu anderen Stellen im Speicher führen
+** *Schwachstelle ausnutzen um injecteten Maschinencode auszuführen*
 
+=== Data Execution Prevention (DEP)
+* Genereller Begriff für Speicherschutzfeatures
+* Markiert Bereiche im Speicher als änderbar (writeable) oder ausführbar (executable)
+* Kann in Form von Software oder Hardware implementiert werden
+* In CPUs implementiert (je nach Marke anders genannt):
+** ARM: XN-Bit (nie ausführen)
+** Intel: XD-Bit (Ausführung deaktiviert)
+** AMD: NX-Bit (nicht ausführbar), auch "Enhanced Virus Protection" genannt (Marketing)
+** VIA: NX-Bit
+{sp}+
+{sp}+
+
+==== Konzept
+* Jede _memory page_(festgelegte, aufeinanderfolgende Speicherstellen) besitzt ein DEP-Bit, welches den Inhalt der page als nicht ausführbar markiert
+* Kernel versichert dass nur Daten aus validen Codesektionen ausgeführt werden können
+
+==== Write-or-Execute W^X
+* Eine _memory page_ ist änderbar oder ausführbar, aber nie beides
+* System muss DEP-Bits unterstützen
+
+==== Vorteile von DEP
+* Injecten von bösartigen Code wird schwerer (wenn man schreiben kann, kann man die _memory page_ nicht ausführen)
+* Exploit Preise höher, es existieren aber Alternativen
+
+==== Return-Oriented Programming (ROP)
+1. Textsegment eines bereits laufenden Prozesses wird gelesen
+2. Vom Prozess existierende Codeabschnitte (_gadgets_ genannt) werden für bösartige Absichten ausgeführt
+
+=== Address Space Layout Randomization (ASLR)
+* *Startadressen von manchen*(partial ASLR) oder *allen*(full ASLR) Prozessspeicher(Stack, Heap, BSS,...) sind *zufällig*
+* Vorteile
+** Bösartigen Code injecten, Schwachstellen finden _gadgets_ ausführen sind sehr schwer durchzuführen da die Adressen zufällig sind
+** ASLR ist die womöglich effektivste Sicherheitsmaßnahme
+* Notwendigkeit von _partial ASLR_
+** Bei _full ASLR_ muss die Applikation und dessen gelinkten Libraries positionsunabhängig kompeliert(position independent, auch _PIE-enabled_ genannt) werden
+
+IMPORTANT: Genaugenommen muss, um ASLR richtig zu verwenden, alle Programme im System _PIE-enabled_ sein
+
+image::memory-protection-aslr-disabled-vs-enabled.png[]
+
+=== Position Independent Executable (PIE)
+
+* Compiler generiert ausführbaren Code mit fixen Adressen
+** Beispiel: `int counter` liegt bei der Adresse `0xfeb1ff00`
+* *Virtual address space*: Virtuelle Adresse wird zur physischen gemappt
+* Adressen werden zur Laufzeit berechnet indem zum Program Counter (PC) ein fixer Abstandswert addiert wird.
+** Beispiel: PC + `0x768`
+** Der Abstand wird sich nie ändern (=> fixe und unveränderbare(immutable) Adressen)
+* Optionen beim GCC compiler
+** `-fPIC`: PIE für code (z.B. Libraries)
+** `-fPIE`: PIE für Ausführbares (Executables)
+* Problem bei 32 Bit Systemen:
+** Ein generelles Register wird verwendet, um die ASLR Adressen zu merken, (schlechte Performance)
+** Speicheradressen nur 32 Bit lang => maximal 10 Bits fürs Randomisieren => Zufallswert ist nur begrenzt groß (Schwachstelle muss maximal 2^10 ausgenutzt werden, um die richtige Adresse zu erwischen)
+
+== Kernel Address Randomized Link(KARL)
